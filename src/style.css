@@ -484,3 +484,9 @@ button.icon:hover,
         flex-direction: column;
     }
 }
+
+/* current page highlight for fallback paginator */
+label > input[name="page"]:checked + span {
+  font-weight: 600;
+  text-decoration: underline;
+}

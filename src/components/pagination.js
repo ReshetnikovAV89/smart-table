@@ -1,38 +1,75 @@
-import { getPages } from "../lib/utils.js";
+export function initPagination(elements, createPage) {
+  let pageCount = 1;
 
-export const initPagination = ({ pages, fromRow, toRow, totalRows }, createPage) => {
-  // #2.3 — шаблон кнопки страницы и очистка контейнера
-  const pageTemplate = pages.firstElementChild.cloneNode(true);
-  pages.firstElementChild.remove();
-
-  return (data, state, action) => {
-    // #2.1 — расчёты
-    const rowsPerPage = state.rowsPerPage;
-    const pageCount = Math.ceil(data.length / rowsPerPage);
+  const applyPagination = (query, state, action) => {
+    const limit = state.rowsPerPage;
     let page = state.page;
 
-    // #2.6 — обработка действий управления
-    if (action) switch (action.name) {
-      case 'prev':  page = Math.max(1, page - 1); break;
-      case 'next':  page = Math.min(pageCount, page + 1); break;
-      case 'first': page = 1; break;
-      case 'last':  page = pageCount; break;
+    if (action) {
+      const name = action?.name || action?.dataset?.name;
+      
+      if (name && (/^filter/.test(name) || name === "search")) {
+        page = 1;
+      }
+
+      if (name === "rowsPerPage") page = 1;
+      if (name === "first") page = 1;
+      if (name === "prev") page = Math.max(1, page - 1);
+      if (name === "next") page = Math.min(pageCount, page + 1);
+      if (name === "last") page = pageCount;
+      if (name === "page" && action.value) page = Number(action.value);
     }
 
-    // #2.4 — видимые номера страниц
-    const visiblePages = getPages(page, pageCount, 5);
-    pages.replaceChildren(...visiblePages.map(num => {
-      const el = pageTemplate.cloneNode(true);
-      return createPage(el, num, num === page);
-    }));
-
-    // #2.5 — статус
-    fromRow.textContent = (page - 1) * rowsPerPage + 1;
-    toRow.textContent   = Math.min(page * rowsPerPage, data.length);
-    totalRows.textContent = data.length;
-
-    // #2.2 — срез данных текущей страницы
-    const skip = (page - 1) * rowsPerPage;
-    return data.slice(skip, skip + rowsPerPage);
+    return { ...query, limit, page };
   };
-};
+
+  const updatePagination = (total, { page, limit }) => {
+    pageCount = Math.max(1, Math.ceil(total / Math.max(1, limit)));
+    
+    if (elements.pages && typeof createPage === "function") {
+      const frag = document.createDocumentFragment();
+      const maxVisible = 5;
+      const half = Math.floor(maxVisible / 2);
+      let start = Math.max(1, page - half);
+      let end = Math.min(pageCount, start + maxVisible - 1);
+      start = Math.max(1, Math.min(start, Math.max(1, end - maxVisible + 1)));
+
+      const makeBase = () => {
+        if (elements.pageTemplate && elements.pageTemplate.content) {
+          return elements.pageTemplate.content.firstElementChild.cloneNode(true);
+        }
+        
+        const label = document.createElement("label");
+        const input = document.createElement("input");
+        input.type = "radio";
+        input.name = "page";
+        input.hidden = true;
+        const span = document.createElement("span");
+        label.appendChild(input);
+        label.appendChild(span);
+        return label;
+      };
+
+      for (let p = start; p <= end; p++) {
+        const base = makeBase();
+        const node = createPage(base, p, p === page);
+        frag.appendChild(node);
+      }
+      elements.pages.replaceChildren(frag);
+    }
+    
+    elements.first?.toggleAttribute("disabled", page <= 1);
+    elements.prev?.toggleAttribute("disabled", page <= 1);
+    elements.next?.toggleAttribute("disabled", page >= pageCount);
+    elements.last?.toggleAttribute("disabled", page >= pageCount);
+    
+    if (
+      elements.rowsPerPage &&
+      String(elements.rowsPerPage.value) !== String(limit)
+    ) {
+      elements.rowsPerPage.value = String(limit);
+    }
+  };
+
+  return { applyPagination, updatePagination };
+}
